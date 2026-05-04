@@ -11,6 +11,7 @@ const PORT        = process.env.PORT || 3000;
 const SELF_URL    = process.env.RENDER_EXTERNAL_URL || '';
 const DATA_DIR     = process.env.DATA_DIR || __dirname;
 const USERS_FILE    = path.join(DATA_DIR, 'users.json');
+const AUTH_FILE     = path.join(DATA_DIR, 'auth_tokens.json');
 const HISTORY_DIR   = path.join(DATA_DIR, 'history');
 const SESSION_DIR   = path.join(DATA_DIR, 'sessions');
 const CAMPAIGN_DIR  = path.join(DATA_DIR, 'campaigns');
@@ -23,7 +24,17 @@ const CAMPAIGN_DIR  = path.join(DATA_DIR, 'campaigns');
 const bots = new Map();
 
 // ── Active auth sessions: token → { userId, name, email } ────────────────────
-const sessions = new Map();
+const sessionsMap = new Map();
+function loadAuth() {
+    const data = loadJSON(AUTH_FILE, {});
+    for (const [k, v] of Object.entries(data)) sessionsMap.set(k, v);
+}
+function saveAuth() {
+    const obj = {};
+    sessionsMap.forEach((v, k) => obj[k] = v);
+    saveJSON(AUTH_FILE, obj);
+}
+loadAuth();
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const hash  = s => crypto.createHash('sha256').update(s).digest('hex');
@@ -320,7 +331,8 @@ const server = http.createServer(async (req, res) => {
             if (users.find(u => u.email === email.toLowerCase())) return json(res, { error: 'Email already registered' }, 409);
             const user = { id: Date.now().toString(36), name, email: email.toLowerCase(), password: hash(password), createdAt: new Date().toISOString() };
             users.push(user); saveUsers(users);
-            const token = mkTok(); sessions.set(token, { userId: user.id, name: user.name, email: user.email });
+            const token = mkTok(); sessionsMap.set(token, { userId: user.id, name: user.name, email: user.email });
+            saveAuth();
             startBotForUser(user.id);
             return json(res, { success: true, token, name: user.name });
         } catch (e) { return json(res, { error: e.message }, 400); }
@@ -337,7 +349,8 @@ const server = http.createServer(async (req, res) => {
             const admP = process.env.ADMIN_PASS;
             if (admE && admP && email.toLowerCase() === admE.toLowerCase() && password === admP) {
                 const token = mkTok();
-                sessions.set(token, { userId: 'admin', name: 'Master Admin', email: admE });
+                sessionsMap.set(token, { userId: 'admin', name: 'Master Admin', email: admE });
+                saveAuth();
                 const b = bots.get('admin');
                 if (!b || (b.status === 'disconnected' && !b.reconnTimer)) startBotForUser('admin');
                 loadCampaignState('admin');
@@ -348,7 +361,8 @@ const server = http.createServer(async (req, res) => {
             const users = loadUsers();
             const user  = users.find(u => u.email === email.toLowerCase() && u.password === hash(password));
             if (!user) return json(res, { error: 'Wrong email or password' }, 401);
-            const token = mkTok(); sessions.set(token, { userId: user.id, name: user.name, email: user.email });
+            const token = mkTok(); sessionsMap.set(token, { userId: user.id, name: user.name, email: user.email });
+            saveAuth();
             const bot = bots.get(user.id);
             if (!bot || (bot.status === 'disconnected' && !bot.reconnTimer)) startBotForUser(user.id);
             loadCampaignState(user.id);
@@ -357,7 +371,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ── Auth required ─────────────────────────────────────────────────────────
-    const me = sessions.get(req.headers['x-auth-token'] || '');
+    const me = sessionsMap.get(req.headers['x-auth-token'] || '');
     if (!me) return json(res, { error: 'Unauthorized' }, 401);
     const { userId } = me;
 

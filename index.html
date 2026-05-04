@@ -325,6 +325,10 @@ tbody tr:hover{background:rgba(255,255,255,.03)}
       <input type="password" id="loginPass" class="auth-input" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()">
       <div class="auth-err" id="loginErr"></div>
       <button class="login-btn" onclick="doLogin()"><i class="fas fa-sign-in-alt" style="margin-right:8px"></i>Login</button>
+      <div style="margin-top:18px; font-size:0.75em; color:var(--sub); border-top:1px solid var(--border); padding-top:15px; line-height:1.4">
+        <i class="fas fa-info-circle" style="margin-right:5px; color:var(--yellow)"></i>
+        <b>Using Render Free Tier?</b> Use your <u>ADMIN_EMAIL</u> and <u>ADMIN_PASS</u> from environment variables to avoid losing your account on restart.
+      </div>
     </div>
     <!-- Signup form -->
     <div class="auth-form" id="signupForm">
