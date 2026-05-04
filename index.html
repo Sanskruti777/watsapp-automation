@@ -6,7 +6,7 @@
 <title>WA Bulk Sender</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
 <!-- Login page styles -->
@@ -509,6 +509,7 @@ Formats accepted:
       <div class="export-row">
         <button class="exp-btn exp-pdf" onclick="exportPDF()"><i class="fas fa-file-pdf"></i>Export PDF</button>
         <button class="exp-btn exp-xls" onclick="exportExcel()"><i class="fas fa-file-excel"></i>Export Excel</button>
+        <button onclick="clearHistory()" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:var(--red);padding:7px 14px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:.82em"><i class="fas fa-trash-alt"></i> Clear All History</button>
         <button onclick="loadHistory()" style="background:transparent;border:1px solid var(--border);color:var(--sub);padding:7px 14px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:.82em"><i class="fas fa-sync-alt"></i> Refresh</button>
       </div>
     </div>
@@ -602,6 +603,7 @@ function showSection(s){
   document.getElementById('senderSection').classList.toggle('active',s==='sender');
   document.getElementById('histPage').classList.toggle('active',s==='history');
   if(s==='history') loadHistory();
+  if(s==='sender') syncSettings();
 }
 
 // Smart routing: check bot status first, skip QR if already connected
@@ -639,13 +641,7 @@ if(authToken){
 }
 
 // ── Default messages ─────────────────────────────────────────────────────────
-const DEFAULT_MSGS = [
-  'Hi! Check out our latest offers 🎉',
-  'Hello! We have something special for you today 🌟',
-  'Hey! Don\'t miss out on our exclusive deal 🔥',
-  'Hi there! We thought you\'d love this offer 💎',
-  'Hello! Your exclusive discount is waiting 🎁'
-];
+const DEFAULT_MSGS = [];
 
 // ── QR Polling ───────────────────────────────────────────────────────────────
 async function pollQR() {
@@ -698,7 +694,7 @@ async function resetSession(){
   }catch{alert('❌ Failed to reset');}
 }
 function initDash(){
-  DEFAULT_MSGS.forEach(m=>addMsg(m));
+  if(!document.querySelectorAll('#msgList textarea').length) addMsg();
   statusT=setInterval(pollStatus,2000);
 }
 
@@ -767,6 +763,41 @@ function addMsg(text = '') {
 function getMsgs() {
   return [...document.querySelectorAll('#msgList textarea')].map(t => t.value.trim()).filter(Boolean);
 }
+
+async function syncSettings(){
+  const msgs = getMsgs();
+  const arEnabled = document.getElementById('autoReplyCheck').checked;
+  const arText = document.getElementById('autoReplyText').value.trim();
+  const keywords = [];
+  document.querySelectorAll('.key-row').forEach(row => {
+    const k = row.querySelector('.key-inp').value.trim();
+    const v = row.querySelector('.val-inp').value.trim();
+    if(k && v) keywords.push({key:k, val:v});
+  });
+
+  try{
+    await fetch(`${API}/api/save-settings`, {
+      method:'POST',headers:apiHeaders(),
+      body:JSON.stringify({
+        messages: msgs,
+        autoReplyEnabled: arEnabled,
+        autoReplyText: arText,
+        keywords: keywords
+      })
+    });
+  }catch{}
+}
+
+// Add event listener for auto-saving
+document.addEventListener('input', (e) => {
+  if (e.target.closest('#msgList') || e.target.closest('#autoReplyText') || e.target.closest('#keywordSection')) {
+    clearTimeout(window._saveTimer);
+    window._saveTimer = setTimeout(syncSettings, 1000);
+  }
+});
+document.addEventListener('change', (e) => {
+  if (e.target.id === 'autoReplyCheck') syncSettings();
+});
 
 // ── Campaign controls ────────────────────────────────────────────────────────
 async function startCampaign(){
@@ -1045,16 +1076,17 @@ async function deleteRecord(ts){
     loadHistory();
   }catch{}
 }
+async function clearHistory(){
+  if(!confirm('This will permanently delete ALL your history. Continue?')) return;
+  try{
+    await fetch(`${API}/api/history/clear`,{method:'POST',headers:apiHeaders()});
+    loadHistory();
+  }catch{}
+}
 
 let currentChatNum = '';
 let templateIdx = 0;
-const TEMPLATES = [
-  'Hi! How can I help you today?',
-  'Thanks for reaching out! We will get back to you shortly.',
-  'Could you please share more details about your requirement?',
-  'Our current price list is attached. Would you like to place an order?',
-  'Sure, I can help with that. Please wait a moment.'
-];
+const TEMPLATES = [];
 
 function openChat(num){
   currentChatNum = num;

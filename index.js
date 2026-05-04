@@ -100,9 +100,8 @@ function addLog(userId, msg) {
 
 function saveCampaignState(userId) {
     const c = getOrCreateCampaign(userId);
-    if (!c.numbers.length) return;
     saveJSON(userCampaignFile(userId), {
-        running:c.running, numbers:c.numbers, messages:c.messages,
+        running:c.running, numbers:c.numbers || [], messages:c.messages || [],
         currentIndex:c.currentIndex, intervalMs:c.intervalMs,
         totalSent:c.totalSent, totalFailed:c.totalFailed,
         startTime:c.startTime, log:c.log.slice(0, 50),
@@ -422,6 +421,28 @@ const server = http.createServer(async (req, res) => {
             let hist = loadJSON(userHistoryFile(userId), []);
             hist = hist.filter(h => h.sentAt !== timestamp);
             saveJSON(userHistoryFile(userId), hist);
+            return json(res, { success: true });
+        } catch (e) { return json(res, { error: e.message }, 400); }
+    }
+
+    // POST /api/history/clear
+    if (req.method === 'POST' && url === '/api/history/clear') {
+        try {
+            saveJSON(userHistoryFile(userId), []);
+            return json(res, { success: true });
+        } catch (e) { return json(res, { error: e.message }, 400); }
+    }
+
+    // POST /api/save-settings
+    if (req.method === 'POST' && url === '/api/save-settings') {
+        try {
+            const body = await parseBody(req);
+            const c = getOrCreateCampaign(userId);
+            if (body.messages) c.messages = body.messages;
+            if (body.autoReplyText !== undefined) c.autoReplyText = body.autoReplyText;
+            if (body.autoReplyEnabled !== undefined) c.autoReplyEnabled = body.autoReplyEnabled;
+            if (body.keywords) c.keywords = body.keywords;
+            saveCampaignState(userId);
             return json(res, { success: true });
         } catch (e) { return json(res, { error: e.message }, 400); }
     }
