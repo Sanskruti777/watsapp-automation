@@ -87,7 +87,7 @@ function getOrCreateCampaign(userId) {
             running:false, numbers:[], messages:[], currentIndex:0,
             intervalMs:600000, timer:null, log:[], totalSent:0,
             totalFailed:0, startTime:null, userId,
-            autoReplyEnabled: false, autoReplyText: "",
+            autoReplyEnabled: false, autoReplyText: "Ask them to call or WhatsApp 9324509881",
             keywords: [] // [{key: "hi", val: "hello there"}]
         });
     }
@@ -160,6 +160,13 @@ async function sendNext(userId) {
     c.currentIndex++;
 
     try {
+        // 🛡️ ANTI-BAN: Simulate human typing
+        await bot.sock.presenceObserve(jid);
+        await sleep(2000); 
+        await bot.sock.sendPresenceUpdate('composing', jid);
+        await sleep(3000); // Wait 3s as if typing
+        await bot.sock.sendPresenceUpdate('paused', jid);
+
         await bot.sock.sendMessage(jid, { text: msg });
         c.totalSent++;
         addLog(userId, `✅ [${idx}/${c.numbers.length}] Sent → +${raw}`);
@@ -173,8 +180,12 @@ async function sendNext(userId) {
     saveCampaignState(userId);
 
     if (c.currentIndex < c.numbers.length && c.running) {
-        addLog(userId, `⏱️ Next in ${Math.round(c.intervalMs / 60000)} min...`);
-        scheduleNext(userId, c.intervalMs);
+        // 🛡️ ANTI-BAN: Random Jitter (+/- 10%)
+    const jitter = (Math.random() * 0.2) + 0.9; // 0.9 to 1.1
+    const actualDelay = Math.floor(c.intervalMs * jitter);
+    
+    addLog(userId, `⏱ Next message in ~${Math.round(actualDelay/60000)} mins...`);
+    c.timer = setTimeout(() => sendNext(userId), actualDelay);
     } else if (c.running) {
         c.running = false;
         c.timer = null;
@@ -244,6 +255,10 @@ async function startBotForUser(userId) {
             if (m.type !== 'notify') return;
             for (const msg of m.messages) {
                 if (!msg.message) continue;
+                
+                // 🛑 SYNC FILTER: Ignore messages older than 1 minute (prevents old chats from showing as new history)
+                const msgTime = (msg.messageTimestamp || Date.now() / 1000) * 1000;
+                if (msgTime < Date.now() - 60000) continue; 
                 const c = getOrCreateCampaign(userId);
                 const mObj = msg.message;
                 const incoming = (
@@ -547,6 +562,8 @@ const server = http.createServer(async (req, res) => {
 
     res.writeHead(404); res.end('Not found');
 });
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 server.listen(PORT, () => {
     console.log(`\n✅ Server → http://localhost:${PORT}\n`);
