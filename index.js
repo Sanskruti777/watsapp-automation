@@ -16,9 +16,14 @@ const AUTH_FILE     = path.join(DATA_DIR, 'auth_tokens.json');
 const HISTORY_DIR   = path.join(DATA_DIR, 'history');
 const SESSION_DIR   = path.join(DATA_DIR, 'sessions');
 const CAMPAIGN_DIR  = path.join(DATA_DIR, 'campaigns');
+const SETTINGS_FILE  = path.join(DATA_DIR, 'settings.json');
 
 // Ensure dirs exist
 [HISTORY_DIR, SESSION_DIR, CAMPAIGN_DIR].forEach(d => { if(!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); });
+
+// Global App Settings
+let appSettings = loadJSON(SETTINGS_FILE, { keepAlive: true });
+function saveAppSettings() { saveJSON(SETTINGS_FILE, appSettings); }
 
 // ── Per-user bot instances ────────────────────────────────────────────────────
 // bots Map: userId → { sock, status, qr, reconnDelay, reconnTimer }
@@ -292,6 +297,7 @@ async function startBotForUser(userId) {
 function startKeepAlive() {
     if (!SELF_URL) { console.log('ℹ️ Self-ping disabled (local)'); return; }
     setInterval(() => {
+        if (!appSettings.keepAlive) return;
         const u = new URL(SELF_URL + '/ping'), mod = u.protocol === 'https:' ? https : http;
         mod.get({ hostname: u.hostname, path: '/ping', timeout: 10000 }, r => console.log(`🏓 Ping ${r.statusCode}`)).on('error', () => {}).end();
     }, 14 * 60 * 1000);
@@ -374,6 +380,21 @@ const server = http.createServer(async (req, res) => {
     const me = sessionsMap.get(req.headers['x-auth-token'] || '');
     if (!me) return json(res, { error: 'Unauthorized' }, 401);
     const { userId } = me;
+
+    // GET /api/config
+    if (req.method === 'GET' && url === '/api/config') {
+        return json(res, appSettings);
+    }
+
+    // POST /api/config
+    if (req.method === 'POST' && url === '/api/config') {
+        try {
+            const body = await parseBody(req);
+            if (body.keepAlive !== undefined) appSettings.keepAlive = !!body.keepAlive;
+            saveAppSettings();
+            return json(res, { success: true, settings: appSettings });
+        } catch (e) { return json(res, { error: e.message }, 400); }
+    }
 
     // GET /api/qr — user's own QR
     if (req.method === 'GET' && url === '/api/qr') {

@@ -464,6 +464,15 @@ Formats accepted:
       </div>
       <textarea id="autoReplyText" class="reply-area" placeholder="Default reply for any other message..."></textarea>
       
+      <!-- Render Keep Alive Toggle -->
+      <div class="switch-row" style="margin-top: 15px; border-top: 1px solid var(--border); padding-top: 15px;">
+        <label style="font-size:.85em;font-weight:600"><i class="fas fa-server" style="margin-right:6px"></i>Render Active (Pi Pong)</label>
+        <label class="switch">
+          <input type="checkbox" id="keepAliveCheck" onchange="toggleKeepAlive(this)">
+          <span class="slider"></span>
+        </label>
+      </div>
+      
       <div id="keywordSection" class="keyword-list">
         <div style="font-size:.78em;color:var(--sub);font-weight:600;margin-bottom:4px">Custom Keyword Replies:</div>
         <div id="keyList"></div>
@@ -696,6 +705,7 @@ async function resetSession(){
 function initDash(){
   if(!document.querySelectorAll('#msgList textarea').length) addMsg();
   statusT=setInterval(pollStatus,2000);
+  fetchConfig();
 }
 
 // ── Input method tabs ────────────────────────────────────────────────────────
@@ -936,6 +946,33 @@ function showToast(msg){
   document.getElementById('toastMsg').textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 5000);
+}
+
+async function fetchConfig() {
+  try {
+    const r = await fetch(`${API}/api/config`, { headers: apiHeaders() });
+    const d = await r.json();
+    if (d.keepAlive !== undefined) {
+      document.getElementById('keepAliveCheck').checked = d.keepAlive;
+    }
+  } catch {}
+}
+
+async function toggleKeepAlive(el) {
+  try {
+    const r = await fetch(`${API}/api/config`, {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify({ keepAlive: el.checked })
+    });
+    const d = await r.json();
+    if (d.success) {
+      showToast(el.checked ? 'Render Keep-Alive Enabled 🏓' : 'Render Keep-Alive Disabled ⏹️');
+    }
+  } catch {
+    alert('❌ Failed to update settings');
+    el.checked = !el.checked;
+  }
 }
 
 // ── History ───────────────────────────────────────────────────────────────────
