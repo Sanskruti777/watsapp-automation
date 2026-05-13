@@ -9,7 +9,7 @@ const path   = require('path');
 const crypto = require('crypto');
 
 const PORT        = process.env.PORT || 3000;
-const SELF_URL    = process.env.RENDER_EXTERNAL_URL || '';
+const SELF_URL    = process.env.RENDER_EXTERNAL_URL || ''; 
 const DATA_DIR     = process.env.DATA_DIR || __dirname;
 const USERS_FILE    = path.join(DATA_DIR, 'users.json');
 const AUTH_FILE     = path.join(DATA_DIR, 'auth_tokens.json');
@@ -297,9 +297,20 @@ async function startBotForUser(userId) {
 function startKeepAlive() {
     if (!SELF_URL) { console.log('ℹ️ Self-ping disabled (local)'); return; }
     setInterval(() => {
-        if (!appSettings.keepAlive) return;
+        // Smart Keep-Alive: Ping if manual toggle is ON OR if any campaign is active
+        let anyCampaignRunning = false;
+        campaigns.forEach(c => { if(c.running) anyCampaignRunning = true; });
+
+        if (!appSettings.keepAlive && !anyCampaignRunning) {
+            // console.log('😴 System sleeping (no active campaigns)');
+            return;
+        }
+
         const u = new URL(SELF_URL + '/ping'), mod = u.protocol === 'https:' ? https : http;
-        mod.get({ hostname: u.hostname, path: '/ping', timeout: 10000 }, r => console.log(`🏓 Ping ${r.statusCode}`)).on('error', () => {}).end();
+        mod.get({ hostname: u.hostname, path: '/ping', timeout: 10000 }, r => {
+            if (anyCampaignRunning) console.log(`🚀 Campaign Active - Ping ${r.statusCode}`);
+            else console.log(`🏓 Manual Keep-Alive - Ping ${r.statusCode}`);
+        }).on('error', () => {}).end();
     }, 14 * 60 * 1000);
 }
 

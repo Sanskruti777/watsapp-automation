@@ -1066,12 +1066,19 @@ function exportPDF(){
 function exportExcel(){
   if(!histData.length){alert('No history data to export.');return;}
   const rows=[['#','Phone Number','Message','Status','Date & Time']];
-  histData.forEach((h,i)=>rows.push([i+1,'+'+h.number,h.message||'',h.status,new Date(h.sentAt).toLocaleString('en-IN')]));
-  const ws=XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols']=[{wch:5},{wch:15},{wch:60},{wch:10},{wch:22}];
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'History');
-  XLSX.writeFile(wb,`wa-history-${Date.now()}.xlsx`);
+  histData.forEach((h,i)=> {
+    // Clean message text for excel
+    const msg = h.message || '';
+    rows.push([i+1, '+'+h.number, msg, h.status, new Date(h.sentAt).toLocaleString('en-IN')]);
+  });
+  
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'History');
+  
+  // XLSX.writeFile handles UTF-8 automatically for .xlsx files
+  XLSX.writeFile(wb, `wa-bulk-report-${Date.now()}.xlsx`);
+  showToast('📊 Excel Exported (Marathi/Hindi supported)');
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
