@@ -1,25 +1,25 @@
 require('dotenv').config();
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
-const pino   = require('pino');
-const http   = require('http');
-const https  = require('https');
+const pino = require('pino');
+const http = require('http');
+const https = require('https');
 const QRCode = require('qrcode');
-const fs     = require('fs');
-const path   = require('path');
+const fs = require('fs');
+const path = require('path');
 const crypto = require('crypto');
 
-const PORT        = process.env.PORT || 3000;
-const SELF_URL    = process.env.RENDER_EXTERNAL_URL || ''; 
-const DATA_DIR     = process.env.DATA_DIR || __dirname;
-const USERS_FILE    = path.join(DATA_DIR, 'users.json');
-const AUTH_FILE     = path.join(DATA_DIR, 'auth_tokens.json');
-const HISTORY_DIR   = path.join(DATA_DIR, 'history');
-const SESSION_DIR   = path.join(DATA_DIR, 'sessions');
-const CAMPAIGN_DIR  = path.join(DATA_DIR, 'campaigns');
-const SETTINGS_FILE  = path.join(DATA_DIR, 'settings.json');
+const PORT = process.env.PORT || 3000;
+const SELF_URL = process.env.RENDER_EXTERNAL_URL || '';
+const DATA_DIR = process.env.DATA_DIR || __dirname;
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const AUTH_FILE = path.join(DATA_DIR, 'auth_tokens.json');
+const HISTORY_DIR = path.join(DATA_DIR, 'history');
+const SESSION_DIR = path.join(DATA_DIR, 'sessions');
+const CAMPAIGN_DIR = path.join(DATA_DIR, 'campaigns');
+const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
 // Ensure dirs exist
-[HISTORY_DIR, SESSION_DIR, CAMPAIGN_DIR].forEach(d => { if(!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); });
+[HISTORY_DIR, SESSION_DIR, CAMPAIGN_DIR].forEach(d => { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); });
 
 // Global App Settings
 let appSettings = loadJSON(SETTINGS_FILE, { keepAlive: true });
@@ -43,7 +43,7 @@ function saveAuth() {
 loadAuth();
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const hash  = s => crypto.createHash('sha256').update(s).digest('hex');
+const hash = s => crypto.createHash('sha256').update(s).digest('hex');
 const mkTok = () => crypto.randomBytes(24).toString('hex');
 
 function json(res, data, code = 200) {
@@ -59,14 +59,14 @@ function parseBody(req) {
 }
 
 function loadJSON(file, def) { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return def; } }
-function saveJSON(file, data) { try { fs.writeFileSync(file, JSON.stringify(data, null, 2)); } catch {} }
+function saveJSON(file, data) { try { fs.writeFileSync(file, JSON.stringify(data, null, 2)); } catch { } }
 
 const loadUsers = () => loadJSON(USERS_FILE, []);
-const saveUsers = d  => saveJSON(USERS_FILE, d);
+const saveUsers = d => saveJSON(USERS_FILE, d);
 
 function userHistoryFile(userId) { return path.join(HISTORY_DIR, `${userId}.json`); }
-function userCampaignFile(userId){ return path.join(CAMPAIGN_DIR, `${userId}.json`); }
-function userSessionDir(userId)  { return path.join(SESSION_DIR,  userId); }
+function userCampaignFile(userId) { return path.join(CAMPAIGN_DIR, `${userId}.json`); }
+function userSessionDir(userId) { return path.join(SESSION_DIR, userId); }
 
 function addHistoryRecord(userId, number, message, status) {
     const file = userHistoryFile(userId);
@@ -84,9 +84,9 @@ const campaigns = new Map(); // userId → campaign object
 function getOrCreateCampaign(userId) {
     if (!campaigns.has(userId)) {
         campaigns.set(userId, {
-            running:false, numbers:[], messages:[], currentIndex:0,
-            intervalMs:600000, timer:null, log:[], totalSent:0,
-            totalFailed:0, startTime:null, userId,
+            running: false, numbers: [], messages: [], currentIndex: 0,
+            intervalMs: 600000, timer: null, log: [], totalSent: 0,
+            totalFailed: 0, startTime: null, userId,
             autoReplyEnabled: false, autoReplyText: "Ask them to call or WhatsApp 9324509881",
             keywords: [] // [{key: "hi", val: "hello there"}]
         });
@@ -99,17 +99,17 @@ function addLog(userId, msg) {
     const t = new Date().toLocaleTimeString('en-IN', { hour12: true });
     c.log.unshift(`[${t}] ${msg}`);
     if (c.log.length > 300) c.log.length = 300;
-    console.log(`[${userId.slice(0,6)}] ${msg}`);
+    console.log(`[${userId.slice(0, 6)}] ${msg}`);
     saveCampaignState(userId);
 }
 
 function saveCampaignState(userId) {
     const c = getOrCreateCampaign(userId);
     saveJSON(userCampaignFile(userId), {
-        running:c.running, numbers:c.numbers || [], messages:c.messages || [],
-        currentIndex:c.currentIndex, intervalMs:c.intervalMs,
-        totalSent:c.totalSent, totalFailed:c.totalFailed,
-        startTime:c.startTime, log:c.log.slice(0, 50),
+        running: c.running, numbers: c.numbers || [], messages: c.messages || [],
+        currentIndex: c.currentIndex, intervalMs: c.intervalMs,
+        totalSent: c.totalSent, totalFailed: c.totalFailed,
+        startTime: c.startTime, log: c.log.slice(0, 50),
         autoReplyEnabled: c.autoReplyEnabled,
         autoReplyText: c.autoReplyText,
         keywords: c.keywords || []
@@ -135,14 +135,14 @@ function loadCampaignState(userId) {
 
 // ── Bulk sender ───────────────────────────────────────────────────────────────
 async function sendNext(userId) {
-    const c   = getOrCreateCampaign(userId);
+    const c = getOrCreateCampaign(userId);
     const bot = bots.get(userId);
     if (!c.running) return;
 
     if (c.currentIndex >= c.numbers.length) {
         c.running = false;
         addLog(userId, `🎉 Done! ✅${c.totalSent} sent  ❌${c.totalFailed} failed`);
-        try { fs.unlinkSync(userCampaignFile(userId)); } catch {}
+        try { fs.unlinkSync(userCampaignFile(userId)); } catch { }
         return;
     }
 
@@ -153,44 +153,52 @@ async function sendNext(userId) {
     }
 
     const raw = String(c.numbers[c.currentIndex]).replace(/\D/g, '');
-    const jid = (raw.length === 10 ? '91' + raw : raw) + '@s.whatsapp.net';
+    // Normalize: if 10 digits → prepend 91; if already 12 digits starting with 91 → use as-is; else use as-is
+    const normalized = raw.length === 10 ? '91' + raw : raw;
+    const jid = normalized + '@s.whatsapp.net';
     const pool = c.messages.filter(m => m && m.trim());
-    const msg  = pool[Math.floor(Math.random() * pool.length)] || 'Hello!';
-    const idx  = c.currentIndex + 1;
+    const msg = pool[Math.floor(Math.random() * pool.length)] || 'Hello!';
+    const idx = c.currentIndex + 1;
     c.currentIndex++;
 
     try {
         // 🛡️ ANTI-BAN: Simulate human typing
-        await bot.sock.presenceObserve(jid);
-        await sleep(2000); 
-        await bot.sock.sendPresenceUpdate('composing', jid);
-        await sleep(3000); // Wait 3s as if typing
-        await bot.sock.sendPresenceUpdate('paused', jid);
+        try {
+            await bot.sock.presenceSubscribe(jid); // ✅ correct Baileys API
+            await sleep(1500);
+            await bot.sock.sendPresenceUpdate('composing', jid);
+            await sleep(2000); // Wait 2s as if typing
+            await bot.sock.sendPresenceUpdate('paused', jid);
+        } catch (simErr) {
+            console.log(`[${userId.slice(0, 6)}] Anti-ban sim error (non-fatal):`, simErr.message);
+        }
 
         await bot.sock.sendMessage(jid, { text: msg });
         c.totalSent++;
-        addLog(userId, `✅ [${idx}/${c.numbers.length}] Sent → +${raw}`);
-        addHistoryRecord(userId, raw, msg, 'sent');
-    } catch {
+        addLog(userId, `✅ [${idx}/${c.numbers.length}] Sent → +${normalized}`);
+        addHistoryRecord(userId, normalized, msg, 'sent');
+    } catch (err) {
         c.totalFailed++;
-        addLog(userId, `❌ [${idx}/${c.numbers.length}] Failed → +${raw}`);
-        addHistoryRecord(userId, raw, msg, 'failed');
+        const errMsg = err.message || 'Unknown Error';
+        addLog(userId, `❌ [${idx}/${c.numbers.length}] Failed → +${normalized} (${errMsg.slice(0, 60)})`);
+        console.error(`[${userId.slice(0, 6)}] Send error to ${normalized}:`, err);
+        addHistoryRecord(userId, normalized, msg, 'failed');
     }
 
     saveCampaignState(userId);
 
     if (c.currentIndex < c.numbers.length && c.running) {
         // 🛡️ ANTI-BAN: Random Jitter (+/- 10%)
-    const jitter = (Math.random() * 0.2) + 0.9; // 0.9 to 1.1
-    const actualDelay = Math.floor(c.intervalMs * jitter);
-    
-    addLog(userId, `⏱ Next message in ~${Math.round(actualDelay/60000)} mins...`);
-    c.timer = setTimeout(() => sendNext(userId), actualDelay);
+        const jitter = (Math.random() * 0.2) + 0.9; // 0.9 to 1.1
+        const actualDelay = Math.floor(c.intervalMs * jitter);
+
+        addLog(userId, `⏱ Next message in ~${Math.round(actualDelay / 60000)} mins...`);
+        c.timer = setTimeout(() => sendNext(userId), actualDelay);
     } else if (c.running) {
         c.running = false;
         c.timer = null;
         addLog(userId, `🎉 All done! ✅${c.totalSent}  ❌${c.totalFailed}`);
-        try { fs.unlinkSync(userCampaignFile(userId)); } catch {}
+        try { fs.unlinkSync(userCampaignFile(userId)); } catch { }
     }
 }
 
@@ -199,22 +207,29 @@ async function sendDirect(userId, to, text) {
     if (!bot || bot.status !== 'connected' || !bot.sock) throw new Error('WhatsApp not connected');
     const raw = to.replace(/\D/g, '');
     const jid = (raw.length === 10 ? '91' + raw : raw) + '@s.whatsapp.net';
-    await bot.sock.sendMessage(jid, { text });
-    addLog(userId, `📤 Sent manual message to +${raw}`);
-    addHistoryRecord(userId, raw, text, 'sent');
+    try {
+        await bot.sock.sendMessage(jid, { text });
+        addLog(userId, `📤 Sent manual message to +${raw}`);
+        addHistoryRecord(userId, raw, text, 'sent');
+    } catch (err) {
+        console.error(`[${userId.slice(0, 6)}] Send direct error:`, err);
+        addLog(userId, `❌ Failed manual msg to +${raw} (${(err.message || '').slice(0, 30)})`);
+        addHistoryRecord(userId, raw, text, 'failed');
+        throw err;
+    }
 }
 
 // ── Per-user WhatsApp bot ─────────────────────────────────────────────────────
 async function startBotForUser(userId) {
     let bot = bots.get(userId);
-    if (!bot) { bot = { sock:null, status:'waiting', qr:null, reconnDelay:3000, reconnTimer:null, userId }; bots.set(userId, bot); }
+    if (!bot) { bot = { sock: null, status: 'waiting', qr: null, reconnDelay: 3000, reconnTimer: null, userId }; bots.set(userId, bot); }
 
     try {
         const sessDir = userSessionDir(userId);
         fs.mkdirSync(sessDir, { recursive: true });
 
         const { state, saveCreds } = await useMultiFileAuthState(sessDir);
-        const { version }          = await fetchLatestBaileysVersion();
+        const { version } = await fetchLatestBaileysVersion();
 
         bot.sock = makeWASocket({
             version, auth: state, printQRInTerminal: false,
@@ -224,16 +239,16 @@ async function startBotForUser(userId) {
 
         bot.sock.ev.on('connection.update', update => {
             const { connection, lastDisconnect, qr } = update;
-            if (qr) { 
-                bot.qr = qr; bot.status = 'waiting'; bot.reconnDelay = 3000; 
+            if (qr) {
+                bot.qr = qr; bot.status = 'waiting'; bot.reconnDelay = 3000;
                 if (!bot.lastQrLog || Date.now() - bot.lastQrLog > 60000) {
-                    console.log(`📱 QR for ${userId.slice(0,6)}...`); 
+                    console.log(`📱 QR for ${userId.slice(0, 6)}...`);
                     bot.lastQrLog = Date.now();
                 }
             }
             if (connection === 'open') {
                 bot.qr = null; bot.status = 'connected'; bot.reconnDelay = 3000;
-                console.log(`✅ WA connected for ${userId.slice(0,6)}`);
+                console.log(`✅ WA connected for ${userId.slice(0, 6)}`);
                 const c = getOrCreateCampaign(userId);
                 if (c.running && c.currentIndex < c.numbers.length && !c.timer) {
                     addLog(userId, '🔗 WhatsApp reconnected — resuming campaign...');
@@ -243,7 +258,7 @@ async function startBotForUser(userId) {
             if (connection === 'close') {
                 const code = lastDisconnect?.error?.output?.statusCode;
                 bot.status = 'disconnected'; bot.sock = null;
-                if (code === DisconnectReason.loggedOut) { bot.qr = null; console.log(`🚪 Logout: ${userId.slice(0,6)}`); return; }
+                if (code === DisconnectReason.loggedOut) { bot.qr = null; console.log(`🚪 Logout: ${userId.slice(0, 6)}`); return; }
                 bot.reconnDelay = Math.min(bot.reconnDelay * 1.5, 30000);
                 if (bot.reconnTimer) clearTimeout(bot.reconnTimer);
                 bot.reconnTimer = setTimeout(() => startBotForUser(userId), bot.reconnDelay);
@@ -255,37 +270,37 @@ async function startBotForUser(userId) {
             if (m.type !== 'notify') return;
             for (const msg of m.messages) {
                 if (!msg.message) continue;
-                
+
                 // 🛑 SYNC FILTER: Ignore messages older than 1 minute (prevents old chats from showing as new history)
                 const msgTime = (msg.messageTimestamp || Date.now() / 1000) * 1000;
-                if (msgTime < Date.now() - 60000) continue; 
+                if (msgTime < Date.now() - 60000) continue;
                 const c = getOrCreateCampaign(userId);
                 const mObj = msg.message;
                 const incoming = (
-                    mObj.conversation || 
-                    mObj.extendedTextMessage?.text || 
-                    mObj.imageMessage?.caption || 
-                    mObj.videoMessage?.caption || 
+                    mObj.conversation ||
+                    mObj.extendedTextMessage?.text ||
+                    mObj.imageMessage?.caption ||
+                    mObj.videoMessage?.caption ||
                     (mObj.imageMessage ? '📷 [Image]' : '') ||
                     (mObj.videoMessage ? '🎥 [Video]' : '') ||
                     (mObj.documentMessage ? '📄 [Document]' : '') ||
                     (mObj.audioMessage ? '🎵 [Audio]' : '') ||
                     ''
                 ).trim();
-                
+
                 const jid = msg.key.remoteJid;
                 if (!jid || !jid.endsWith('@s.whatsapp.net')) continue;
                 const remoteNum = jid.split('@')[0];
 
                 if (msg.key.fromMe) {
                     addHistoryRecord(userId, remoteNum, incoming, 'sent');
-                    console.log(`[${userId.slice(0,4)}] 📤 Sent from phone: ${incoming.slice(0,20)}...`);
-                    continue; 
+                    console.log(`[${userId.slice(0, 4)}] 📤 Sent from phone: ${incoming.slice(0, 20)}...`);
+                    continue;
                 }
 
                 addHistoryRecord(userId, remoteNum, incoming, 'received');
                 addLog(userId, `📩 New message from +${remoteNum}`);
-                console.log(`[${userId.slice(0,4)}] 📥 Received reply from +${remoteNum}: ${incoming.slice(0,20)}...`);
+                console.log(`[${userId.slice(0, 4)}] 📥 Received reply from +${remoteNum}: ${incoming.slice(0, 20)}...`);
 
                 if (!c.autoReplyEnabled) continue;
                 let match = (c.keywords || []).find(k => k.key && incoming.toLowerCase().includes(k.key.toLowerCase().trim()));
@@ -300,7 +315,7 @@ async function startBotForUser(userId) {
             }
         });
     } catch (err) {
-        console.error(`Bot error ${userId.slice(0,6)}:`, err.message);
+        console.error(`Bot error ${userId.slice(0, 6)}:`, err.message);
         if (!bot) return;
         bot.reconnDelay = Math.min(bot.reconnDelay * 1.5, 30000);
         if (bot.reconnTimer) clearTimeout(bot.reconnTimer);
@@ -314,7 +329,7 @@ function startKeepAlive() {
     setInterval(() => {
         // Smart Keep-Alive: Ping if manual toggle is ON OR if any campaign is active
         let anyCampaignRunning = false;
-        campaigns.forEach(c => { if(c.running) anyCampaignRunning = true; });
+        campaigns.forEach(c => { if (c.running) anyCampaignRunning = true; });
 
         if (!appSettings.keepAlive && !anyCampaignRunning) {
             // console.log('😴 System sleeping (no active campaigns)');
@@ -325,7 +340,7 @@ function startKeepAlive() {
         mod.get({ hostname: u.hostname, path: '/ping', timeout: 10000 }, r => {
             if (anyCampaignRunning) console.log(`🚀 Campaign Active - Ping ${r.statusCode}`);
             else console.log(`🏓 Manual Keep-Alive - Ping ${r.statusCode}`);
-        }).on('error', () => {}).end();
+        }).on('error', () => { }).end();
     }, 14 * 60 * 1000);
 }
 
@@ -353,7 +368,7 @@ const server = http.createServer(async (req, res) => {
         try {
             const { name, email, password } = await parseBody(req);
             if (!name || !email || !password) return json(res, { error: 'All fields required' }, 400);
-            
+
             // Prevent signup with admin email
             if (process.env.ADMIN_EMAIL && email.toLowerCase() === process.env.ADMIN_EMAIL.toLowerCase()) {
                 return json(res, { error: 'Invalid email' }, 400);
@@ -391,7 +406,7 @@ const server = http.createServer(async (req, res) => {
 
             // 2. Regular users
             const users = loadUsers();
-            const user  = users.find(u => u.email === email.toLowerCase() && u.password === hash(password));
+            const user = users.find(u => u.email === email.toLowerCase() && u.password === hash(password));
             if (!user) return json(res, { error: 'Wrong email or password' }, 401);
             const token = mkTok(); sessionsMap.set(token, { userId: user.id, name: user.name, email: user.email });
             saveAuth();
@@ -438,14 +453,14 @@ const server = http.createServer(async (req, res) => {
 
     // GET /api/bulk/status — user's campaign + pending numbers
     if (req.method === 'GET' && url === '/api/bulk/status') {
-        const c   = getOrCreateCampaign(userId);
+        const c = getOrCreateCampaign(userId);
         const bot = bots.get(userId);
         const pending = c.numbers.slice(c.currentIndex);
         return json(res, {
-            running:c.running, total:c.numbers.length, currentIndex:c.currentIndex,
-            totalSent:c.totalSent, totalFailed:c.totalFailed,
-            remaining:c.numbers.length - c.currentIndex,
-            intervalMs:c.intervalMs, log:c.log.slice(0,80),
+            running: c.running, total: c.numbers.length, currentIndex: c.currentIndex,
+            totalSent: c.totalSent, totalFailed: c.totalFailed,
+            remaining: c.numbers.length - c.currentIndex,
+            intervalMs: c.intervalMs, log: c.log.slice(0, 80),
             botStatus: bot ? bot.status : 'waiting',
             pendingNumbers: pending,
             messages: c.messages,
@@ -507,25 +522,25 @@ const server = http.createServer(async (req, res) => {
     // POST /api/bulk/start
     if (req.method === 'POST' && url === '/api/bulk/start') {
         try {
-            const body     = await parseBody(req);
-            const numbers  = (body.numbers || []).map(n => String(n).replace(/\D/g, '')).filter(n => n.length >= 10);
+            const body = await parseBody(req);
+            const numbers = (body.numbers || []).map(n => String(n).replace(/\D/g, '')).filter(n => n.length >= 10);
             const messages = (body.messages || []).filter(m => m && m.trim());
-            if (!numbers.length)  return json(res, { error: 'No valid numbers' }, 400);
+            if (!numbers.length) return json(res, { error: 'No valid numbers' }, 400);
             if (!messages.length) return json(res, { error: 'No messages' }, 400);
             const c = getOrCreateCampaign(userId);
             if (c.timer) clearTimeout(c.timer);
             Object.assign(c, {
-                running:true, numbers, messages, currentIndex:0,
-                totalSent:0, totalFailed:0, intervalMs:body.intervalMs || 600000,
-                log:[], startTime:new Date().toISOString(), timer:null,
+                running: true, numbers, messages, currentIndex: 0,
+                totalSent: 0, totalFailed: 0, intervalMs: body.intervalMs || 600000,
+                log: [], startTime: new Date().toISOString(), timer: null,
                 autoReplyEnabled: !!body.autoReplyEnabled,
                 autoReplyText: body.autoReplyText || "",
                 keywords: body.keywords || []
             });
-            addLog(userId, `🚀 Started → ${numbers.length} numbers, ${messages.length} msgs, ${Math.round(c.intervalMs/60000)}min`);
+            addLog(userId, `🚀 Started → ${numbers.length} numbers, ${messages.length} msgs, ${Math.round(c.intervalMs / 60000)}min`);
             scheduleNext(userId, 2000);
-            return json(res, { success:true, total:numbers.length });
-        } catch (e) { return json(res, { error:e.message }, 400); }
+            return json(res, { success: true, total: numbers.length });
+        } catch (e) { return json(res, { error: e.message }, 400); }
     }
 
     // POST /api/bulk/resume
@@ -536,7 +551,7 @@ const server = http.createServer(async (req, res) => {
         c.running = true;
         addLog(userId, `▶️ Resumed → ${c.numbers.length - c.currentIndex} numbers remaining`);
         scheduleNext(userId, 2000);
-        return json(res, { success:true, remaining: c.numbers.length - c.currentIndex });
+        return json(res, { success: true, remaining: c.numbers.length - c.currentIndex });
     }
 
     // POST /api/bulk/stop
@@ -546,18 +561,18 @@ const server = http.createServer(async (req, res) => {
         c.running = false;
         addLog(userId, `⏹️ Stopped. ✅${c.totalSent} ❌${c.totalFailed}`);
         saveCampaignState(userId);
-        return json(res, { success:true });
+        return json(res, { success: true });
     }
 
     // POST /api/reset
     if (req.method === 'POST' && url === '/api/reset') {
         const bot = bots.get(userId);
         if (bot && bot.reconnTimer) clearTimeout(bot.reconnTimer);
-        try { if (bot && bot.sock) await bot.sock.logout(); } catch {}
-        fs.rmSync(userSessionDir(userId), { recursive:true, force:true });
+        try { if (bot && bot.sock) await bot.sock.logout(); } catch { }
+        fs.rmSync(userSessionDir(userId), { recursive: true, force: true });
         bots.delete(userId);
         setTimeout(() => startBotForUser(userId), 1000);
-        return json(res, { success:true });
+        return json(res, { success: true });
     }
 
     res.writeHead(404); res.end('Not found');
